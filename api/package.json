@@ -1,0 +1,7 @@
+{
+  "name": "@voltgas/api",
+  "version": "1.0.0",
+  "dependencies": {
+    "@voltgas/types": "*"
+  }
+}

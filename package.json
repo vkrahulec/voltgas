@@ -1,0 +1,9 @@
+{
+  "name": "voltgas",
+  "private": true,
+  "workspaces": [
+    "apps/mobile",
+    "api",
+    "packages/types"
+  ]
+}
