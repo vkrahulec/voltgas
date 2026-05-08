@@ -1,6 +1,7 @@
+import { IncomingMessage, ServerResponse } from 'http';
 import { Station } from '@voltgas/types';
 
-export const stations: Station[] = [
+const stations: Station[] = [
   {
     id: '1',
     name: 'Shell Brno Centrum',
@@ -29,3 +30,8 @@ export const stations: Station[] = [
     address: 'Nádražní 23, 150 00 Praha 5',
   },
 ];
+
+export default function handler(req: IncomingMessage, res: ServerResponse) {
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify(stations));
+}
