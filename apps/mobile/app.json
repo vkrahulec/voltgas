@@ -4,6 +4,8 @@
     "slug": "voltgas-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "platforms": ["ios", "android", "web"]
+    "platforms": ["ios", "android", "web"],
+    "newArchEnabled": true,
+    "entryPoint": "./index.js"
   }
 }
