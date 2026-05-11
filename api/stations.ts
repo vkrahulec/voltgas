@@ -29,6 +29,33 @@ const stations: Station[] = [
     price: 8.5,
     address: 'Nádražní 23, 150 00 Praha 5',
   },
+  {
+    id: '4',
+    name: 'Benzina Ostrava Poruba',
+    type: 'gas',
+    lat: 49.8209,
+    lng: 18.1603,
+    price: 39.2,
+    address: 'Opavská 45, 708 00 Ostrava',
+  },
+  {
+    id: '5',
+    name: 'EV Dobíjecí Stanice Plzeň',
+    type: 'ev',
+    lat: 49.7384,
+    lng: 13.3736,
+    price: 7.9,
+    address: 'Americká 18, 301 00 Plzeň',
+  },
+  {
+    id: '6',
+    name: 'MOL Liberec Centrum',
+    type: 'gas',
+    lat: 50.7663,
+    lng: 15.0543,
+    price: 38.4,
+    address: 'Moskevská 5, 460 01 Liberec',
+  },
 ];
 
 export default function handler(req: IncomingMessage, res: ServerResponse) {
