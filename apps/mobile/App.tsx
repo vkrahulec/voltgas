@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useStations } from './src/hooks/useStations';
 import {
@@ -13,14 +13,17 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Defs, Line, Path, Pattern, Rect } from 'react-native-svg';
-import { Fuel, List, Map as MapIcon, Moon, Navigation, Search, Sun, SunMoon, Zap } from 'lucide-react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Location from 'expo-location';
+import { Fuel, List, Map as MapIcon, Moon, Search, Sun, SunMoon, Zap } from 'lucide-react-native';
 import { Station } from '@voltgas/types';
 
 const queryClient = new QueryClient();
 
 const DEFAULT_LAT = 50.0755;
 const DEFAULT_LNG = 14.4378;
+
+type UserLocation = { lat: number; lng: number };
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 
@@ -78,14 +81,6 @@ const filters: Record<'fuel' | 'ev', { id: string; label: string }[]> = {
   ],
 };
 
-const MAP_POSITIONS = [
-  { top: 60, left: 40 },
-  { top: 180, left: 200 },
-  { top: 110, left: 260 },
-  { top: 290, left: 90 },
-  { top: 230, left: 310 },
-  { top: 340, left: 210 },
-];
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
@@ -103,12 +98,23 @@ function AppContent() {
   const [view, setView] = useState<'map' | 'list'>('map');
   const [mode, setMode] = useState<'fuel' | 'ev'>('fuel');
   const [activeFilter, setActiveFilter] = useState('all');
+  const [userLocation, setUserLocation] = useState<UserLocation>({ lat: DEFAULT_LAT, lng: DEFAULT_LNG });
 
   const isDark = themePref === 'system' ? (systemScheme ?? 'dark') === 'dark' : themePref === 'dark';
   const c = isDark ? darkColors : lightColors;
   const styles = useMemo(() => makeStyles(c), [isDark]);
 
-  const { data: stations = [], isLoading: loading } = useStations(DEFAULT_LAT, DEFAULT_LNG, mode);
+  useEffect(() => {
+    Location.requestForegroundPermissionsAsync().then(({ status }) => {
+      if (status === 'granted') {
+        Location.getCurrentPositionAsync({}).then(loc => {
+          setUserLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+        });
+      }
+    });
+  }, []);
+
+  const { data: stations = [], isLoading: loading } = useStations(userLocation.lat, userLocation.lng, mode);
 
   const cycleTheme = () =>
     setThemePref(prev => THEME_CYCLE[(THEME_CYCLE.indexOf(prev) + 1) % THEME_CYCLE.length]);
@@ -190,7 +196,7 @@ function AppContent() {
               <ActivityIndicator size="large" color={c.green} />
             </View>
           ) : view === 'map' ? (
-            <MapPlaceholder filtered={filtered} accent={accent} c={c} styles={styles} />
+            <StationMap filtered={filtered} userLocation={userLocation} />
           ) : (
             <StationList filtered={filtered} accent={accent} accentBg={accentBg} mode={mode} c={c} styles={styles} />
           )}
@@ -219,50 +225,36 @@ function AppContent() {
   );
 }
 
-// ─── Map placeholder ──────────────────────────────────────────────────────────
+// ─── Station map ──────────────────────────────────────────────────────────────
 
-function MapPlaceholder({
-  filtered, accent, c, styles,
+function StationMap({
+  filtered, userLocation,
 }: {
-  filtered: Station[]; accent: string; c: Colors; styles: ReturnType<typeof makeStyles>;
+  filtered: Station[]; userLocation: UserLocation;
 }) {
   return (
-    <View style={StyleSheet.absoluteFill}>
-      <Svg style={StyleSheet.absoluteFill} opacity={0.08}>
-        <Defs>
-          <Pattern id="grid" width={50} height={50} patternUnits="userSpaceOnUse">
-            <Path d="M 50 0 L 0 0 0 50" fill="none" stroke={c.muted} strokeWidth={0.5} />
-          </Pattern>
-        </Defs>
-        <Rect width="100%" height="100%" fill="url(#grid)" />
-      </Svg>
-
-      <Svg style={StyleSheet.absoluteFill} opacity={0.15}>
-        <Line x1={0} y1={160} x2={400} y2={140} stroke={c.muted} strokeWidth={5} strokeLinecap="round" />
-        <Line x1={90} y1={0} x2={110} y2={400} stroke={c.muted} strokeWidth={4} strokeLinecap="round" />
-        <Line x1={0} y1={310} x2={400} y2={290} stroke={c.muted} strokeWidth={3} strokeLinecap="round" />
-      </Svg>
-
-      {filtered.map((s, idx) => {
-        const pos = MAP_POSITIONS[idx % MAP_POSITIONS.length];
-        return (
-          <View key={s.id} style={[styles.marker, { top: pos.top, left: pos.left }]}>
-            <View style={[styles.markerBadge, { backgroundColor: accent }]}>
-              <Text style={styles.markerPrice}>{s.price != null ? s.price.toFixed(2) : '--'} Kč</Text>
-            </View>
-            <View style={[styles.markerDot, { backgroundColor: accent, shadowColor: accent }]} />
-          </View>
-        );
-      })}
-
-      <View style={styles.userDot} />
-
-      <View style={styles.navBtnWrapper}>
-        <Pressable style={styles.navBtn}>
-          <Navigation size={20} color={c.text} />
-        </Pressable>
-      </View>
-    </View>
+    <MapView
+      style={StyleSheet.absoluteFill}
+      provider={PROVIDER_GOOGLE}
+      showsUserLocation
+      showsMyLocationButton={false}
+      initialRegion={{
+        latitude: userLocation.lat,
+        longitude: userLocation.lng,
+        latitudeDelta: 0.15,
+        longitudeDelta: 0.15,
+      }}
+    >
+      {filtered.map(s => (
+        <Marker
+          key={s.id}
+          coordinate={{ latitude: s.lat, longitude: s.lng }}
+          title={s.name}
+          description={s.address ?? ''}
+          pinColor={s.type === 'ev' ? '#22c55e' : '#3b82f6'}
+        />
+      ))}
+    </MapView>
   );
 }
 
@@ -344,26 +336,6 @@ function makeStyles(c: Colors) {
 
     content: { flex: 1, backgroundColor: c.contentBg },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-
-    marker: { position: 'absolute', alignItems: 'center' },
-    markerBadge: { borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, marginBottom: 3 },
-    markerPrice: { fontSize: 10, fontWeight: '900', color: '#fff' },
-    markerDot: {
-      width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: '#fff',
-      shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 5, elevation: 4,
-    },
-    userDot: {
-      position: 'absolute', top: '50%', left: '50%', marginTop: -9, marginLeft: -9,
-      width: 18, height: 18, borderRadius: 9,
-      backgroundColor: '#fff', borderWidth: 3, borderColor: '#3b82f6',
-      shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 10, elevation: 6,
-    },
-    navBtnWrapper: { position: 'absolute', bottom: 16, right: 16 },
-    navBtn: {
-      backgroundColor: c.card, borderWidth: 1, borderColor: c.border,
-      borderRadius: 16, padding: 10,
-      shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
-    },
 
     listContainer: { padding: 12, gap: 10 },
     stationCard: {
