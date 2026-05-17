@@ -25,6 +25,25 @@ const DEFAULT_LNG = 14.4378;
 
 type UserLocation = { lat: number; lng: number };
 
+// ─── Map styles ───────────────────────────────────────────────────────────────
+
+const DARK_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#212121' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#212121' }] },
+  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
+  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#181818' }] },
+  { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { featureType: 'road', elementType: 'geometry.fill', stylers: [{ color: '#2c2c2c' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#8a8a8a' }] },
+  { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#373737' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3c3c3c' }] },
+  { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#616161' }] },
+  { featureType: 'transit', elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
+  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#3d3d3d' }] },
+];
+
 // ─── Theme ────────────────────────────────────────────────────────────────────
 
 type ThemePref = 'dark' | 'light' | 'system';
@@ -196,7 +215,7 @@ function AppContent() {
               <ActivityIndicator size="large" color={c.green} />
             </View>
           ) : view === 'map' ? (
-            <StationMap filtered={filtered} userLocation={userLocation} />
+            <StationMap filtered={filtered} userLocation={userLocation} isDark={isDark} />
           ) : (
             <StationList filtered={filtered} accent={accent} accentBg={accentBg} mode={mode} c={c} styles={styles} />
           )}
@@ -228,9 +247,9 @@ function AppContent() {
 // ─── Station map ──────────────────────────────────────────────────────────────
 
 function StationMap({
-  filtered, userLocation,
+  filtered, userLocation, isDark,
 }: {
-  filtered: Station[]; userLocation: UserLocation;
+  filtered: Station[]; userLocation: UserLocation; isDark: boolean;
 }) {
   return (
     <MapView
@@ -238,6 +257,7 @@ function StationMap({
       provider={PROVIDER_GOOGLE}
       showsUserLocation
       showsMyLocationButton={false}
+      customMapStyle={isDark ? DARK_MAP_STYLE : []}
       initialRegion={{
         latitude: userLocation.lat,
         longitude: userLocation.lng,
