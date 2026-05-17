@@ -1,64 +1,94 @@
-import { IncomingMessage, ServerResponse } from 'http';
-import { Station } from '@voltgas/types';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import type { Station } from '@voltgas/types';
 
-const stations: Station[] = [
-  {
-    id: '1',
-    name: 'Shell Brno Centrum',
-    type: 'gas',
-    lat: 49.1951,
-    lng: 16.6068,
-    price: 38.9,
-    address: 'Česká 10, 602 00 Brno',
-  },
-  {
-    id: '2',
-    name: 'OMV Praha Zličín',
-    type: 'gas',
-    lat: 50.0647,
-    lng: 14.2897,
-    price: 37.5,
-    address: 'Řevnická 1, 155 21 Praha 5',
-  },
-  {
-    id: '3',
-    name: 'PRE EV Stanice Anděl',
-    type: 'ev',
-    lat: 50.0703,
-    lng: 14.4031,
-    price: 8.5,
-    address: 'Nádražní 23, 150 00 Praha 5',
-  },
-  {
-    id: '4',
-    name: 'Benzina Ostrava Poruba',
-    type: 'gas',
-    lat: 49.8209,
-    lng: 18.1603,
-    price: 39.2,
-    address: 'Opavská 45, 708 00 Ostrava',
-  },
-  {
-    id: '5',
-    name: 'EV Dobíjecí Stanice Plzeň',
-    type: 'ev',
-    lat: 49.7384,
-    lng: 13.3736,
-    price: 7.9,
-    address: 'Americká 18, 301 00 Plzeň',
-  },
-  {
-    id: '6',
-    name: 'MOL Liberec Centrum',
-    type: 'gas',
-    lat: 50.7663,
-    lng: 15.0543,
-    price: 38.4,
-    address: 'Moskevská 5, 460 01 Liberec',
-  },
-];
+interface OCMAddressInfo {
+  Title: string;
+  AddressLine1: string | null;
+  Latitude: number;
+  Longitude: number;
+}
 
-export default function handler(req: IncomingMessage, res: ServerResponse) {
-  res.setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify(stations));
+interface OCMPoi {
+  ID: number;
+  AddressInfo: OCMAddressInfo;
+}
+
+interface TomTomPoi {
+  name: string;
+}
+
+interface TomTomAddress {
+  freeformAddress: string;
+}
+
+interface TomTomPosition {
+  lat: number;
+  lon: number;
+}
+
+interface TomTomResult {
+  id: string;
+  poi: TomTomPoi;
+  address: TomTomAddress;
+  position: TomTomPosition;
+}
+
+interface TomTomResponse {
+  results: TomTomResult[];
+}
+
+async function fetchEVStations(lat: string, lng: string): Promise<Station[]> {
+  const key = process.env.OCM_API_KEY;
+  const url = `https://api.openchargemap.io/v3/poi/?latitude=${lat}&longitude=${lng}&distance=10&distanceunit=km&maxresults=50&output=json&key=${key}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = (await res.json()) as OCMPoi[];
+  return data.map((poi) => ({
+    id: `ev-${poi.ID}`,
+    name: poi.AddressInfo.Title,
+    type: 'ev',
+    lat: poi.AddressInfo.Latitude,
+    lng: poi.AddressInfo.Longitude,
+    address: poi.AddressInfo.AddressLine1 ?? '',
+    price: null,
+  }));
+}
+
+async function fetchFuelStations(lat: string, lng: string): Promise<Station[]> {
+  const key = process.env.TOMTOM_API_KEY;
+  const url = `https://api.tomtom.com/search/2/nearbySearch/.json?lat=${lat}&lon=${lng}&radius=10000&categorySet=7311&limit=50&key=${key}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = (await res.json()) as TomTomResponse;
+  return data.results.map((r) => ({
+    id: `fuel-${r.id}`,
+    name: r.poi.name,
+    type: 'fuel',
+    lat: r.position.lat,
+    lng: r.position.lon,
+    address: r.address.freeformAddress,
+    price: null,
+  }));
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const { lat, lng, type } = req.query;
+
+  if (!lat || !lng) {
+    return res.status(400).json({ error: 'lat and lng query params are required' });
+  }
+
+  const latStr = Array.isArray(lat) ? lat[0] : lat;
+  const lngStr = Array.isArray(lng) ? lng[0] : lng;
+  const typeParam = Array.isArray(type) ? type[0] : type;
+
+  const fetchEV = typeParam === undefined || typeParam === 'ev';
+  const fetchFuel = typeParam === undefined || typeParam === 'fuel';
+
+  const [evStations, fuelStations] = await Promise.all([
+    fetchEV ? fetchEVStations(latStr, lngStr) : Promise.resolve<Station[]>([]),
+    fetchFuel ? fetchFuelStations(latStr, lngStr) : Promise.resolve<Station[]>([]),
+  ]);
+
+  return res.status(200).json([...evStations, ...fuelStations]);
 }

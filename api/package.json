@@ -2,6 +2,7 @@
   "name": "@voltgas/api",
   "version": "1.0.0",
   "dependencies": {
+    "@vercel/node": "^5.0.0",
     "@voltgas/types": "*"
   }
 }

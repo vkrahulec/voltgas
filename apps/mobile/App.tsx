@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useStations } from './src/hooks/useStations';
 import {
   ActivityIndicator,
   Pressable,
@@ -15,7 +17,10 @@ import Svg, { Defs, Line, Path, Pattern, Rect } from 'react-native-svg';
 import { Fuel, List, Map as MapIcon, Moon, Navigation, Search, Sun, SunMoon, Zap } from 'lucide-react-native';
 import { Station } from '@voltgas/types';
 
-const API_URL = 'http://192.168.0.208:3000/api/stations';
+const queryClient = new QueryClient();
+
+const DEFAULT_LAT = 50.0755;
+const DEFAULT_LNG = 14.4378;
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 
@@ -60,8 +65,8 @@ const lightColors: Colors = {
 
 // ─── Static data ──────────────────────────────────────────────────────────────
 
-const filters: Record<'gas' | 'ev', { id: string; label: string }[]> = {
-  gas: [
+const filters: Record<'fuel' | 'ev', { id: string; label: string }[]> = {
+  fuel: [
     { id: 'all', label: 'Vše' },
     { id: '95', label: 'Natural 95' },
     { id: 'diesel', label: 'Nafta' },
@@ -85,38 +90,34 @@ const MAP_POSITIONS = [
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppContent />
+    </QueryClientProvider>
+  );
+}
+
+function AppContent() {
   const systemScheme = useColorScheme();
   const [themePref, setThemePref] = useState<ThemePref>('system');
   const [view, setView] = useState<'map' | 'list'>('map');
-  const [mode, setMode] = useState<'gas' | 'ev'>('gas');
+  const [mode, setMode] = useState<'fuel' | 'ev'>('fuel');
   const [activeFilter, setActiveFilter] = useState('all');
-  const [stations, setStations] = useState<Station[]>([]);
-  const [loading, setLoading] = useState(true);
 
   const isDark = themePref === 'system' ? (systemScheme ?? 'dark') === 'dark' : themePref === 'dark';
   const c = isDark ? darkColors : lightColors;
   const styles = useMemo(() => makeStyles(c), [isDark]);
+
+  const { data: stations = [], isLoading: loading } = useStations(DEFAULT_LAT, DEFAULT_LNG, mode);
 
   const cycleTheme = () =>
     setThemePref(prev => THEME_CYCLE[(THEME_CYCLE.indexOf(prev) + 1) % THEME_CYCLE.length]);
 
   const ThemeIcon = themePref === 'dark' ? Moon : themePref === 'light' ? Sun : SunMoon;
 
-  const fetchStations = useCallback(async () => {
-    try {
-      const res = await fetch(API_URL);
-      const data: Station[] = await res.json();
-      setStations(data);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { fetchStations(); }, [fetchStations]);
-
-  const accent = mode === 'gas' ? c.blue : c.green;
-  const accentBg = mode === 'gas' ? c.blueBg : c.greenBg;
-  const filtered = stations.filter(s => s.type === mode);
+  const accent = mode === 'fuel' ? c.blue : c.green;
+  const accentBg = mode === 'fuel' ? c.blueBg : c.greenBg;
+  const filtered = stations;
 
   return (
     <SafeAreaProvider>
@@ -142,10 +143,10 @@ export default function App() {
           </View>
 
           <View style={styles.modeToggle}>
-            {(['gas', 'ev'] as const).map(id => {
+            {(['fuel', 'ev'] as const).map(id => {
               const isActive = mode === id;
-              const color = id === 'gas' ? c.blue : c.green;
-              const Icon = id === 'gas' ? Fuel : Zap;
+              const color = id === 'fuel' ? c.blue : c.green;
+              const Icon = id === 'fuel' ? Fuel : Zap;
               return (
                 <Pressable
                   key={id}
@@ -154,7 +155,7 @@ export default function App() {
                 >
                   <Icon size={16} color={isActive ? '#fff' : c.subtext} />
                   <Text style={[styles.modeBtnText, { color: isActive ? '#fff' : c.subtext }]}>
-                    {id === 'gas' ? 'Palivo' : 'Nabíjení'}
+                    {id === 'fuel' ? 'Palivo' : 'Nabíjení'}
                   </Text>
                 </Pressable>
               );
@@ -247,7 +248,7 @@ function MapPlaceholder({
         return (
           <View key={s.id} style={[styles.marker, { top: pos.top, left: pos.left }]}>
             <View style={[styles.markerBadge, { backgroundColor: accent }]}>
-              <Text style={styles.markerPrice}>{s.price.toFixed(2)} Kč</Text>
+              <Text style={styles.markerPrice}>{s.price != null ? s.price.toFixed(2) : '--'} Kč</Text>
             </View>
             <View style={[styles.markerDot, { backgroundColor: accent, shadowColor: accent }]} />
           </View>
@@ -281,7 +282,7 @@ function StationList({
     );
   }
 
-  const Icon = mode === 'gas' ? Fuel : Zap;
+  const Icon = mode === 'fuel' ? Fuel : Zap;
 
   return (
     <ScrollView contentContainerStyle={styles.listContainer}>
@@ -298,7 +299,7 @@ function StationList({
 
           <View style={styles.stationRight}>
             <Text style={[styles.priceValue, { color: accent }]}>
-              {s.price.toFixed(2)}{' '}
+              {s.price != null ? s.price.toFixed(2) : '--'}{' '}
               <Text style={styles.priceUnit}>Kč/j</Text>
             </Text>
             <Text style={[styles.priceAge, { color: c.muted }]}>před 15 min</Text>
